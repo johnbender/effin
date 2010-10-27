@@ -4,24 +4,41 @@ import Language.C.Syntax.AST
 import Language.C.Data.Ident
 import Language.C.Analysis
 import Language.C.Analysis.TravMonad
-import Language.C.System.GCC   -- preprocessor used
+import Language.C.System.GCC
 import Data.List
 import Data.Maybe
 import Data.Either
 import Control.Monad
 import Control.Monad.Writer
+import System( getArgs )
+import System.Console.GetOpt
 
-getAnalysed = do parseResult  <- parseCFile (newGCC "gcc") Nothing [] "libvirt.h"
-                 case parseResult of
-                   Right (CTranslUnit x _) -> printAttach $ filter typeDefs $ filter (byName "vir") $ grabFunctions x
-                   Left (ParseError (strings, _)) -> print $ head strings
-                 return ()
+main = do
+  args <- getArgs
+  let (flags, nonOpts, msgs) = getOpt RequireOrder options args
+  getAnalysed $ head nonOpts
 
-printAttach = print . (map stringed)
+data Flag = Version
+
+options :: [OptDescr Flag]
+options = [ Option ['V'] ["version"] (NoArg Version) "show version number" ]
+
+getAnalysed path = do parseResult  <- parseCFile (newGCC "gcc") Nothing [] path
+                      case parseResult of
+                        Right (CTranslUnit x _) -> printAttach $ filter typeDefs $ filter (byName "vir") $ grabFunctions x
+                        Left (ParseError (strings, _)) -> print $ head strings
+                      return ()
+
+printAttach = prettyList . map stringed
     where stringed (return, name, args) = "attach_function " ++ ":" ++ head name ++ ", " ++ handleArgs ++ ", " ++ (head $ argsToString [(handleReturn (head return) args)])
               where handleArgs | args == [] = "[]"
                                | (head $ reverse args) /= "ptr" = "[" ++ (concat $ intersperse ", " $ argsToString args) ++ "]"
                                | otherwise = "[" ++ (concat $ intersperse ", " $ argsToString $ reverse $ tail $ reverse args) ++ "]"
+
+prettyList [] = return ()
+prettyList (x:xs) = do putStrLn x
+                       prettyList xs
+
 
 argsToString = reverse . (toString [])
     where toString acc [] = acc
@@ -64,7 +81,6 @@ derivedFunction (CDeclr _ declarations _ _ _) = funcDeclrIdents
                     extract (CFunDeclr (Right (c, b)) _ _) = (map (show . pretty) c)
                     extract (CPtrDeclr typeQ node ) = ["ptr"]
                     extract (CArrDeclr _ _ _ ) = ["arr"]
-
 
 typeSpecs [] = []
 typeSpecs (x:xs) = (typeSpecs' x) : (typeSpecs xs)

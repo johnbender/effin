@@ -23,8 +23,7 @@ data Flag = Version
 options :: [OptDescr Flag]
 options = [ Option ['V'] ["version"] (NoArg Version) "show version number" ]
 
-getAnalysed path = do handleParse =<< parseCFile (newGCC "gcc") Nothing [] path
-                      return ()
+getAnalysed = handleParse <=< parseCFile (newGCC "gcc") Nothing []
 
 handleParse (Right (CTranslUnit x _)) =
     printAttachDefinitions $ filterUnneeded $ selectFunctionDeclarations x
@@ -57,7 +56,6 @@ mapArgs = reverse . (toString [])
                               | "unsigned char *" `isInfixOf` x = toString (":pointer":acc) xs
                               | "char *" `isInfixOf` x  = toString (":string":acc) xs
                               | "void *" `isInfixOf` x = toString (":void_pointer":acc) xs
-                              | "int" `isInfixOf` x  = toString (":int":acc) xs
                               | "unsigned long long" `isInfixOf` x = toString ( ":ulong_long":acc) xs
                               | "unsigned long" `isInfixOf` x = toString ( ":ulong":acc) xs
                               | otherwise = toString ((":" ++ (head $ words x)):acc) xs

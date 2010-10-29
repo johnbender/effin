@@ -23,24 +23,35 @@ data Flag = Version
 options :: [OptDescr Flag]
 options = [ Option ['V'] ["version"] (NoArg Version) "show version number" ]
 
-getAnalysed path = do parseResult  <- parseCFile (newGCC "gcc") Nothing [] path
-                      case parseResult of
-                        Right (CTranslUnit x _) -> printAttach $ filter typeDefs $ filter (byName "vir") $ grabFunctions x
-                        Left (ParseError (strings, _)) -> print $ head strings
+getAnalysed path = do handleParse =<< parseCFile (newGCC "gcc") Nothing [] path
                       return ()
 
-printAttach = prettyList . map stringed
-    where stringed (return, name, args) = "attach_function " ++ ":" ++ head name ++ ", " ++ handleArgs ++ ", " ++ (head $ argsToString [(handleReturn (head return) args)])
-              where handleArgs | args == [] = "[]"
-                               | (head $ reverse args) /= "ptr" = "[" ++ (concat $ intersperse ", " $ argsToString args) ++ "]"
-                               | otherwise = "[" ++ (concat $ intersperse ", " $ argsToString $ reverse $ tail $ reverse args) ++ "]"
+handleParse (Right (CTranslUnit x _)) =
+    printAttachDefinitions $ filterUnneeded $ selectFunctionDeclarations x
+handleParse (Left (ParseError (strings, _))) = print $ head strings
 
-prettyList [] = return ()
-prettyList (x:xs) = do putStrLn x
-                       prettyList xs
+filterUnneeded = filter typeDefs . filter (byName "vir")
 
+selectFunctionDeclarations [] = []
+selectFunctionDeclarations (x:xs) = (funcDeclr' x) : (selectFunctionDeclarations xs)
+    where funcDeclr' (CDeclExt (CDecl declSpecs declrs _)) =
+              let typeSpecification = typeSpec declSpecs
+                  identifier = grabDeclrsPart ident declrs
+                  functionArg = concat $ grabDeclrsPart derivedFunction declrs
+              in (typeSpecification, identifier, functionArg)
 
-argsToString = reverse . (toString [])
+printAttachDefinitions = foldr (>>) (return ()) . map (putStrLn . functionToString)
+
+functionToString (return, name, args) = let method = "attach_function "
+                                            functionName = ":" ++ head name
+                                            functionArgs = handleArgs args
+                                            returnType = (head $ mapArgs [(handleReturn (head return) args)])
+                                        in method ++ (intercalate ", " [functionName, functionArgs, returnType])
+
+handleArgs [] = "[]"
+handleArgs args = "[" ++ (intercalate ", " $ mapArgs $ dropWhile (== "ptr") args) ++ "]"
+
+mapArgs = reverse . (toString [])
     where toString acc [] = acc
           toString acc (x:xs) | "* *" `isInfixOf` x = toString (":pointer":acc) xs
                               | "unsigned char *" `isInfixOf` x = toString (":pointer":acc) xs
@@ -52,7 +63,7 @@ argsToString = reverse . (toString [])
                               | otherwise = toString ((":" ++ (head $ words x)):acc) xs
 
 handleReturn return [] = return
-handleReturn return args | "ptr" == (head $ reverse args) = return ++ " *"
+handleReturn return args | "ptr" == last args = return ++ " *"
                          | otherwise = return
 
 namesOnly (_, [], _) = ""
@@ -62,12 +73,6 @@ byName _ (_, [], _) = False
 byName name (_, names, _) =  name `isInfixOf` (show $ head names)
 
 typeDefs (defs, _, _) = not ("typedef" `elem` defs)
-
-grabFunctions = funcDeclr
-
-funcDeclr [] = []
-funcDeclr (x:xs) = (funcDeclr' x) : (funcDeclr xs)
-    where funcDeclr' (CDeclExt (CDecl declSpecs declrs _)) = (typeSpec declSpecs, grabDeclrsPart ident declrs, concat $ grabDeclrsPart derivedFunction declrs)
 
 grabDeclrsPart f =  (map f) . catMaybes . map (\(d, _, _) -> d)
 

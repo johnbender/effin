@@ -16,14 +16,14 @@ import System.Console.GetOpt
 main = do
   args <- getArgs
   let (flags, nonOpts, msgs) = getOpt RequireOrder options args
-  getAnalysed $ head nonOpts
+  printFFI $ head nonOpts
 
 data Flag = Version
 
 options :: [OptDescr Flag]
 options = [ Option ['V'] ["version"] (NoArg Version) "show version number" ]
 
-getAnalysed = handleParse <=< parseCFile (newGCC "gcc") Nothing []
+printFFI = handleParse <=< parseCFile (newGCC "gcc") Nothing []
 
 handleParse (Right (CTranslUnit x _)) =
     printAttachDefinitions $ filterUnneeded $ selectFunctionDeclarations x

@@ -1,15 +1,10 @@
 module Main where
-import Language.C as C
-import Language.C.Syntax.AST
+import Language.C
 import Language.C.Data.Ident
-import Language.C.Analysis
-import Language.C.Analysis.TravMonad
 import Language.C.System.GCC
 import Data.List
 import Data.Maybe
-import Data.Either
 import Control.Monad
-import Control.Monad.Writer
 import System( getArgs )
 import System.Console.GetOpt
 

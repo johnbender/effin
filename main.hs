@@ -11,28 +11,28 @@ import System.Console.GetOpt
 main = do
   args <- getArgs
   let (flags, nonOpts, msgs) = getOpt RequireOrder options args
-  printFFI $ head nonOpts
+  case nonOpts of
+    [] -> putStrLn "Usage"
+    otherwise -> printFFI $ head nonOpts
+  return ()
 
 data Flag = Version
 
-options :: [OptDescr Flag]
 options = [ Option ['V'] ["version"] (NoArg Version) "show version number" ]
 
 printFFI = handleParse <=< parseCFile (newGCC "gcc") Nothing []
 
 handleParse (Right (CTranslUnit x _)) =
-    printAttachDefinitions $ filterUnneeded $ selectFunctionDeclarations x
+    printAttachDefinitions $ filterUnneeded $ map (declarationToTriple) x
 handleParse (Left (ParseError (strings, _))) = print $ head strings
 
 filterUnneeded = filter typeDefs . filter (byName "vir")
 
-selectFunctionDeclarations [] = []
-selectFunctionDeclarations (x:xs) = (funcDeclr' x) : (selectFunctionDeclarations xs)
-    where funcDeclr' (CDeclExt (CDecl declSpecs declrs _)) =
-              let typeSpecification = typeSpec declSpecs
-                  identifier = grabDeclrsPart ident declrs
-                  functionArg = concat $ grabDeclrsPart derivedFunction declrs
-              in (typeSpecification, identifier, functionArg)
+declarationToTriple (CDeclExt (CDecl declSpecs declrs _)) =
+    let typeSpecification = typeSpec declSpecs
+        identifier = grabDeclrsPart ident declrs
+        functionArg = concat $ grabDeclrsPart derivedFunction declrs
+    in (typeSpecification, identifier, functionArg)
 
 printAttachDefinitions = foldr (>>) (return ()) . map (putStrLn . functionToString)
 
@@ -45,6 +45,7 @@ functionToString (return, name, args) = let method = "attach_function "
 handleArgs [] = "[]"
 handleArgs args = "[" ++ (intercalate ", " $ mapArgs $ dropWhile (== "ptr") args) ++ "]"
 
+-- TODO move map to data structure
 mapArgs = reverse . (toString [])
     where toString acc [] = acc
           toString acc (x:xs) | "* *" `isInfixOf` x = toString (":pointer":acc) xs
@@ -83,4 +84,3 @@ derivedFunction (CDeclr _ declarations _ _ _) = funcDeclrIdents
 typeSpecs [] = []
 typeSpecs (x:xs) = (typeSpecs' x) : (typeSpecs xs)
    where typeSpecs' (CDeclExt (CDecl specs _ _)) = (\( _ , _ , _ , specs , _ ) -> specs) $ partitionDeclSpecs specs
-

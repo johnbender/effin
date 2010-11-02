@@ -36,25 +36,33 @@ declarationToTriple (CDeclExt (CDecl declSpecs declrs _)) =
 
 printAttachDefinitions = foldr (>>) (return ()) . map (putStrLn . functionToString)
 
-functionToString (return, name, args) = let method = "attach_function "
-                                            functionName = ":" ++ head name
-                                            functionArgs = handleArgs args
-                                            returnType = (head $ mapArgs [(handleReturn (head return) args)])
-                                        in method ++ (intercalate ", " [functionName, functionArgs, returnType])
+functionToString (return, name, args) =
+    let method = "attach_function "
+        functionName = ":" ++ head name
+        functionArgs = handleArgs args
+        returnType = (head $ mapArgs [(handleReturn (head return) args)])
+    in method ++ (intercalate ", " [functionName, functionArgs, returnType])
 
 handleArgs [] = "[]"
 handleArgs args = "[" ++ (intercalate ", " $ mapArgs $ dropWhile (== "ptr") args) ++ "]"
 
--- TODO move map to data structure
+
+-- TODO move to fold
 mapArgs = reverse . (toString [])
     where toString acc [] = acc
-          toString acc (x:xs) | "* *" `isInfixOf` x = toString (":pointer":acc) xs
-                              | "unsigned char *" `isInfixOf` x = toString (":pointer":acc) xs
-                              | "char *" `isInfixOf` x  = toString (":string":acc) xs
-                              | "void *" `isInfixOf` x = toString (":void_pointer":acc) xs
-                              | "unsigned long long" `isInfixOf` x = toString ( ":ulong_long":acc) xs
-                              | "unsigned long" `isInfixOf` x = toString ( ":ulong":acc) xs
-                              | otherwise = toString ((":" ++ (head $ words x)):acc) xs
+          toString acc (x:xs) = toString ((typeToSymbol x):acc) xs
+
+typeToSymbol string = let matches = find (\(k, a) -> k `isInfixOf` string) typeMap
+                      in case matches of
+                        Nothing -> ":" ++ (head $ words string)
+                        Just (k, a) -> a
+
+-- TODO regexes
+typeMap = [("char *", ":string")
+          ,("void *", ":void_pointer")
+          ,("unsigned long long", ":ulong_long")
+          ,("unsigned long", ":ulong")
+          ,("*", ":pointer")]
 
 handleReturn return [] = return
 handleReturn return args | "ptr" == last args = return ++ " *"
@@ -81,6 +89,7 @@ derivedFunction (CDeclr _ declarations _ _ _) = funcDeclrIdents
                     extract (CPtrDeclr typeQ node ) = ["ptr"]
                     extract (CArrDeclr _ _ _ ) = ["arr"]
 
+-- TODO move to map
 typeSpecs [] = []
 typeSpecs (x:xs) = (typeSpecs' x) : (typeSpecs xs)
    where typeSpecs' (CDeclExt (CDecl specs _ _)) = (\( _ , _ , _ , specs , _ ) -> specs) $ partitionDeclSpecs specs

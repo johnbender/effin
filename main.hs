@@ -44,13 +44,9 @@ functionToString (return, name, args) =
     in method ++ (intercalate ", " [functionName, functionArgs, returnType])
 
 handleArgs [] = "[]"
-handleArgs args = "[" ++ (intercalate ", " $ mapArgs $ dropWhile (== "ptr") args) ++ "]"
+handleArgs args = "[" ++ (intercalate ", " $ mapArgs $ takeWhile ("ptr" /=) args) ++ "]"
 
-
--- TODO move to fold
-mapArgs = reverse . (toString [])
-    where toString acc [] = acc
-          toString acc (x:xs) = toString ((typeToSymbol x):acc) xs
+mapArgs = map typeToSymbol
 
 typeToSymbol string = let matches = find (\(k, a) -> k `isInfixOf` string) typeMap
                       in case matches of

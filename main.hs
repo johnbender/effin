@@ -53,12 +53,29 @@ typeToSymbol string = let matches = find (\(k, a) -> k `isInfixOf` string) typeM
                         Nothing -> ":" ++ (head $ words string)
                         Just (k, a) -> a
 
--- TODO regexes
+unsignedType typeName = ("unsigned " ++ typeName, ":u" ++ typeName)
+
+bitLengthInt len = let lenStr = show len
+                   in [("unsigned int" ++ lenStr ++ "_t", ":uint" ++ lenStr),
+                       ("int" ++ lenStr ++ "_t", ":int" ++ lenStr)]
+
+
+intTypes = concatMap bitLengthInt [8, 16, 32, 64]
+
 typeMap = [("char *", ":string")
           ,("void *", ":void_pointer")
           ,("unsigned long long", ":ulong_long")
-          ,("unsigned long", ":ulong")
-          ,("*", ":pointer")]
+          ,("long long", ":long_long")
+          ,unsignedType "long"
+          ,("long", ":long")
+          ,("*", ":pointer")
+          ,("char" , ":char")
+          ,("unsigned", ":uint")
+          ,("signed", ":int")
+          ,unsignedType "char"
+          ,unsignedType "short"
+          ,unsignedType "int"] ++ intTypes
+
 
 handleReturn return [] = return
 handleReturn return args | "ptr" == last args = return ++ " *"
@@ -84,8 +101,3 @@ derivedFunction (CDeclr _ declarations _ _ _) = funcDeclrIdents
                     extract (CFunDeclr (Right (c, b)) _ _) = (map (show . pretty) c)
                     extract (CPtrDeclr typeQ node ) = ["ptr"]
                     extract (CArrDeclr _ _ _ ) = ["arr"]
-
--- TODO move to map
-typeSpecs [] = []
-typeSpecs (x:xs) = (typeSpecs' x) : (typeSpecs xs)
-   where typeSpecs' (CDeclExt (CDecl specs _ _)) = (\( _ , _ , _ , specs , _ ) -> specs) $ partitionDeclSpecs specs
